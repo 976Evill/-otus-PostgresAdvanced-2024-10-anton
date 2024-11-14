@@ -1,1 +1,81 @@
+---зайти удаленным ssh (первая сессия)
+term1:
+Ubuntu comes with ABSOLUTELY NO WARRANTY, to the extent permitted by
+applicable law.
+
+student@postgres2024-02021975:~$ sudo -i
+root@postgres2024-02021975:~# 
+---поставить PostgreSQL из пакетов apt install
+sudo apt update && sudo apt upgrade -y && sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list' && wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add - && sudo apt-get update && sudo apt-get -y install postgresql && sudo apt install unzip && sudo apt -y install mc
+--зайти вторым ssh (вторая сессия)
+term2:
+Last login: Thu Nov 14 13:26:00 2024 from 93.174.131.141
+student@postgres2024-02021975:~$ sudo -i
+root@postgres2024-02021975:~# 
+---запустить везде psql из под пользователя postgres
+su postgres
+psql -U postgres в обоих терминалах
+---выключить auto commit
+\set AUTOCOMMIT OFF
+---сделать в первой сессии новую таблицу и наполнить ее данными
+begin;
+create table persons(id serial, first_name text, second_name text);
+insert into persons(first_name, second_name) values('ivan', 'ivanov');
+insert into persons(first_name, second_name) values('petr', 'petrov');
+commit;
+---посмотреть текущий уровень изоляции
+postgres=# show transaction isolation level
+postgres-# ;
+ transaction_isolation 
+-----------------------
+ read committed
+(1 row)
+---в первой сессии добавить новую запись
+insert into persons(first_name, second_name) values('sergey', 'sergeev');
+---сделать select * from persons во второй сессии
+postgres=*# select * from persons
+postgres-*# ;
+ id | first_name | second_name 
+----+------------+-------------
+  1 | ivan       | ivanov
+  2 | petr       | petrov
+(2 rows)
+---видите ли вы новую запись и если да то почему?
+нет MVCC подобное не позволяет,1-я  транзакция не завершена
+----завершите транзакцию во второй сессии
+commit; во втором и первом терминале
+----начать новые но уже repeatable read транзакции
+set transaction isolation level repeatable read; 
+insert into persons(first_name, second_name) values('sveta', 'svetova');
+---видите ли вы новую запись и если да то почему?
+нет во второй сессии транзакция опять не видна
+---завершить первую транзакцию - commit;
+---сделать select * from persons во второй сессии
+---видите ли вы новую запись и если да то почему?
+нет опять же не видим Repeatable Read не допускает грязное чтение неповторяющееся чтение:
+повторное чтение строки вернет другое значение,если оно было изменено и зафиксировано другой транзакцией
+
+---завершить вторую транзакцию
+---сделать select * from persons во второй сессии
+---видите ли вы новую запись и если да то почему?
+Да видим:
+postgres=# select * from persons;
+ id | first_name | second_name 
+----+------------+-------------
+  1 | ivan       | ivanov
+  2 | petr       | petrov
+  3 | sergey     | sergeev
+  4 | sveta      | svetova
+(4 rows)
+Всё в рамках. mvcc POSTGRESQl. Результат работы завершённой транзакции мы должны видеть.
+
+
+
+
+
+
+
+
+
+
 
