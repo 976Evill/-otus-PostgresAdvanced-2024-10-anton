@@ -1,1 +1,80 @@
 
+• сделать в GCE/ЯО/Аналоги инстанс с Ubuntu 20.04
+• поставить на нем Docker Engine
+• сделать каталог /var/lib/postgres
+• развернуть контейнер с PostgreSQL 14 смонтировав в него /var/lib/postgres
+
+docker run --name postgres_server  -p 5432:5432 -e POSTGRES_PASSWORD=password  -v /var/lib/postgres:/var/lib/postgresql/data -d postgres:14
+docker ps
+CONTAINER ID   IMAGE         COMMAND                  CREATED          STATUS          PORTS                                       NAMES
+5ce695191fbc   postgres:14   "docker-entrypoint.s…"   58 minutes ago   Up 49 minutes   0.0.0.0:5432->5432/tcp, :::5432->5432/tcp   postgres_server
+root@node1:/var/lib/postgres# 
+
+развернуть контейнер с клиентом postgres
+• подключится из контейнера с клиентом к контейнеру с сервером и сделать
+таблицу с парой строк
+
+
+ docker run -it --rm jbergknoff/postgresql-client postgresql://postgres:pass@192.168.26.203:5432/postgres
+root@node1:~# docker ps
+CONTAINER ID   IMAGE                          COMMAND                  CREATED             STATUS          PORTS                                       NAMES
+52971c50edf9   jbergknoff/postgresql-client   "psql postgresql://p…"   42 seconds ago      Up 42 seconds                                               clever_bohr
+5ce695191fbc   postgres:14                    "docker-entrypoint.s…"   About an hour ago   Up 56 minutes   0.0.0.0:5432->5432/tcp, :::5432->5432/tcp   postgres_server
+root@node1:~# 
+
+postgres=# CREATE TABLE lights(
+postgres(#   id integer GENERATED ALWAYS AS IDENTITY,
+postgres(#   lamp text,
+postgres(#   state text
+postgres(# );
+CREATE TABLE
+postgres=# INSERT INTO lights(lamp,state) VALUES
+postgres-#     ('red', 'on'), ('green', 'off');
+INSERT 0 2
+
+• подключится к контейнеру с сервером с ноутбука/компьютера извне инстансов GCP/ЯО/Аналоги
+
+(base) antonlebedev@MacBook-Air-Anton ~ % psql -h 192.168.26.203 -U postgres
+psql (13.4, server 14.14 (Debian 14.14-1.pgdg120+1))
+WARNING: psql major version 13, server major version 14.
+         Some psql features might not work.
+Type "help" for help.
+
+postgres=# 
+• удалить контейнер с сервером
+• создать его заново
+root@node1:/var/lib/postgres# docker ps
+CONTAINER ID   IMAGE         COMMAND                  CREATED             STATUS             PORTS                                       NAMES
+5ce695191fbc   postgres:14   "docker-entrypoint.s…"   About an hour ago   Up About an hour   0.0.0.0:5432->5432/tcp, :::5432->5432/tcp   postgres_server
+root@node1:/var/lib/postgres# docker stop 5ce695191fbc
+5ce695191fbc
+root@node1:/var/lib/postgres# docker rm 5ce695191fbc
+
+root@node1:/var/lib/postgres# docker run --name postgres_server  -p 5432:5432 -e POSTGRES_PASSWORD=password  -v /var/lib/postgres:/var/lib/postgresql/data -d postgres:14
+df3323a15f6572341725db7e810405b2d33c8455ed061cf2c2d546839c1ad05a
+root@node1:/var/lib/postgres# docker ps
+CONTAINER ID   IMAGE         COMMAND                  CREATED          STATUS          PORTS                                       NAMES
+df3323a15f65   postgres:14   "docker-entrypoint.s…"   21 seconds ago   Up 20 seconds   0.0.0.0:5432->5432/tcp, :::5432->5432/tcp   postgres_server
+root@node1:/var/lib/postgres# 
+
+
+• подключится снова из контейнера с клиентом к контейнеру с сервером
+• проверить, что данные остались на месте
+
+32/tcp, :::5432->5432/tcp   postgres_server
+root@node1:/var/lib/postgres# docker run -it --rm jbergknoff/postgresql-client postgresql://postgres:pass@192.168.26.203:5432/postgres
+psql (12.3, server 14.14 (Debian 14.14-1.pgdg120+1))
+WARNING: psql major version 12, server major version 14.
+         Some psql features might not work.
+Type "help" for help.
+
+postgres=# select * from lights;
+ id | lamp  | state 
+----+-------+-------
+  1 | red   | on
+  2 | green | off
+(2 rows)
+
+postgres=# 
+
+
