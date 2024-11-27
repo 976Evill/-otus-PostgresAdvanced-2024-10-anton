@@ -1,0 +1,99 @@
+--создайте виртуальную машину c Ubuntu 20.04 LTS (bionic) в GCE типа e2-medium в default VPC в любом регионе и зоне, например us-central1-a или ЯО/VirtualBox
+--поставьте на нее PostgreSQL 15 через sudo apt
+--проверьте что кластер запущен через sudo -u postgres pg_lsclusters
+
+
+sudo apt install curl ca-certificates
+sudo install -d /usr/share/postgresql-common/pgdg
+sudo curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc
+sudo sh -c 'echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+sudo apt update
+sudo apt -y install postgresql-15
+
+root@compute-vm-2-2-20-hdd-1732744392106:~# sudo -u postgres pg_lsclusters
+Ver Cluster Port Status Owner    Data directory              Log file
+15  main    5432 online postgres /var/lib/postgresql/15/main /var/log/postgresql/postgresql-15-main.log
+root@compute-vm-2-2-20-hdd-1732744392106:~# 
+
+--зайдите из под пользователя postgres в psql и сделайте произвольную таблицу с произвольным содержимым
+--postgres=# create table test(c1 text);
+--postgres=# insert into test values('1');
+--\q
+
+root@compute-vm-2-2-20-hdd-1732744392106:~# su postgres
+postgres@compute-vm-2-2-20-hdd-1732744392106:/root$ psql
+could not change directory to "/root": Permission denied
+psql (15.10 (Ubuntu 15.10-1.pgdg20.04+1))
+Type "help" for help.
+
+postgres=# create table test(c1 text);
+CREATE TABLE
+postgres=# insert into test values('1');
+INSERT 0 1
+postgres=# \q
+postgres@compute-vm-2-2-20-hdd-1732744392106:/root$ 
+--остановите postgres например через sudo -u postgres pg_ctlcluster 15 main stop
+root@compute-vm-2-2-20-hdd-1732744392106:~# sudo -u postgres pg_ctlcluster 15 main stop
+Warning: stopping the cluster using pg_ctlcluster will mark the systemd unit as failed. Consider using systemctl:
+  sudo systemctl stop postgresql@15-main
+root@compute-vm-2-2-20-hdd-1732744392106:~# 
+--добавьте свеже-созданный диск к виртуальной машине - надо зайти в режим ее редактирования и дальше выбрать пункт attach existing disk
+--проинициализируйте диск согласно инструкции и подмонтировать файловую систему, только не забывайте менять имя диска на актуальное, в вашем случае это скорее всего --будет /dev/sdb - https://www.digitalocean.com/community/tutorials/how-to-partition-and-format-storage-devices-in-linux
+
+dev/vdb: UUID="64270931-2f2d-433e-905b-4d0f9c8dca34" TYPE="ext4"
+vi /etc/fstab
+UUID=64270931-2f2d-433e-905b-4d0f9c8dca34 /mnt/vdb ext4 defaults 0 2
+root@compute-vm-2-2-20-hdd-1732746575164:~# df
+Filesystem     1K-blocks    Used Available Use% Mounted on
+udev              978084       0    978084   0% /dev
+tmpfs             201860     804    201056   1% /run
+/dev/vda2       20546752 2921976  16717444  15% /
+tmpfs            1009292    1052   1008240   1% /dev/shm
+tmpfs               5120       0      5120   0% /run/lock
+tmpfs            1009292       0   1009292   0% /sys/fs/cgroup
+tmpfs             201856       0    201856   0% /run/user/1000
+/dev/vdb        10218772      24   9678076   1% /mnt/vdb
+root@compute-vm-2-2-20-hdd-1732746575164:~# 
+
+--- после reboot
+
+student@compute-vm-2-2-20-hdd-1732746575164:~$ sudo -i
+root@compute-vm-2-2-20-hdd-1732746575164:~# df
+Filesystem     1K-blocks    Used Available Use% Mounted on
+udev              978084       0    978084   0% /dev
+tmpfs             201860     804    201056   1% /run
+/dev/vda2       20546752 2922476  16716944  15% /
+tmpfs            1009292    1052   1008240   1% /dev/shm
+tmpfs               5120       0      5120   0% /run/lock
+tmpfs            1009292       0   1009292   0% /sys/fs/cgroup
+/dev/vdb        10218772      24   9678076   1% /mnt/vdb
+tmpfs             201856       0    201856   0% /run/user/1000
+
+сделайте пользователя postgres владельцем /mnt/data - chown -R postgres:postgres /mnt/data/
+
+перенесите содержимое /var/lib/postgresql/15 в /mnt/data - mv /var/lib/postgresql/15 /mnt/data
+mv /var/lib/postgresql/15 /mnt/vdb
+--попытайтесь запустить кластер - sudo -u postgres pg_ctlcluster 15 main start
+Error: /var/lib/postgresql/15/main is not accessible or does not exist
+отсутствуют данные
+--задание: найти конфигурационный параметр в файлах раположенных в /etc/postgresql/14/main который надо поменять и поменяйте его
+--напишите что и почему поменяли
+указал корректную data directory в postgresql.conf
+--попытайтесь запустить кластер - sudo -u postgres pg_ctlcluster 15 main start
+запускается
+--зайдите через через psql и проверьте содержимое ранее созданной таблицы
+
+postgres=# 
+postgres=# select * from test ;
+ c1 
+----
+ 1
+(1 row)
+
+
+
+
+
+
+
+
